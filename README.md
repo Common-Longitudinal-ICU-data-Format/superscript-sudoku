@@ -4,7 +4,7 @@ A single-page web app that turns a spreadsheet of authors and affiliations into 
 
 Inspired by the awesome authorship tool built by Dema Therese Maria Palathingal for the CLIF Consortium! 
 
-Visit here: [https://cloverbunny.github.io/author-formatter/](https://cloverbunny.github.io/author-formatter/)
+Visit here: [https://common-longitudinal-icu-data-format.github.io/superscript-sudoku/](https://common-longitudinal-icu-data-format.github.io/superscript-sudoku/)
 
 ![Screenshot of Superscript Sudoku](assets/screenshot.png)
 
@@ -46,3 +46,8 @@ node examples/reproduce.js
 ```
 
 The script runs the parsing and numbering code taken directly from `index.html` on the CSV rosters, so its output always reflects the current version of the tool.
+
+## Citation
+If you use this tool, please cite:
+
+> Palathingal, D. T. M., & Gao, C. A. (2026). *Superscript Sudoku: an author list formatter* [Software]. https://github.com/Common-Longitudinal-ICU-data-Format/superscript-sudoku
