@@ -117,6 +117,7 @@ footer{display:flex;justify-content:space-between;align-items:flex-end;gap:8px 2
       <ol class="order" id="order" aria-describedby="order-hint"></ol>
       <div class="row">
         <button id="order-reset">Restore spreadsheet order</button>
+        <button id="order-randomize">Randomize author order</button>
         <button id="order-save">Download in this order (.csv)</button>
       </div>
       <p class="sr" aria-live="polite" id="order-live"></p>
@@ -339,7 +340,7 @@ function initials(part, dot) {
   return part.split(/\s+/).filter(Boolean).map(w => w.split('-').map(x => x[0].toUpperCase() + (dot ? '.' : '')).join('-')).join(dot ? ' ' : '');
 }
 function displayName(a, o) {
-  if (o.name === 'asis') return a.full;
+  if (o.name === 'asis' || /\b(consortium|group)\b/i.test(a.full)) return a.full;
   const given = [a.first, a.middle].filter(Boolean).join(' ');
   if (!given) return a.last;
   return `${initials(given, o.name === 'init')} ${a.last}`;
@@ -543,6 +544,16 @@ list.addEventListener('pointercancel', endDrag);
 list.addEventListener('lostpointercapture', endDrag);
 
 $('#order-reset').onclick = () => { order = []; list.innerHTML = ''; render(); };
+$('#order-randomize').onclick = () => {
+  if (!model) return;
+  const keys = model.authors.map(a => a.key);
+  for (let i = keys.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [keys[i], keys[j]] = [keys[j], keys[i]];
+  }
+  order = keys;
+  render();
+};
 $('#order-save').onclick = () => {
   if (!model) return;
   const rows = model.authors.map(a => a.row);
