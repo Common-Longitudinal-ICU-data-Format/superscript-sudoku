@@ -102,13 +102,13 @@ footer{display:flex;justify-content:space-between;align-items:flex-end;gap:8px 2
         <input type="file" id="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.ods" hidden>
       </div>
       <p class="hint">Or paste rows below — copying cells straight out of Excel or Google Sheets works.</p>
-      <textarea id="input" spellcheck="false" placeholder="Name,Affiliation 1,Affiliation 2,Email,Corresponding,Equal contribution"></textarea>
+      <textarea id="input" spellcheck="false" placeholder="Name,Affiliation 1,Affiliation 2,Email,Corresponding,Equal contribution,Funding,COI"></textarea>
       <div class="row">
         <button id="sample">Load example</button>
         <button id="template">Download template</button>
         <button id="clear">Clear</button>
       </div>
-      <p class="hint">Recognised columns: <code>Name</code> (or <code>First name</code> + <code>Last name</code>), any number of <code>Affiliation</code> columns, <code>Email</code>, <code>Corresponding</code> and <code>Equal contribution</code> (mark with yes / x / 1). Without a header row, column 1 is the name and the rest are affiliations.</p>
+      <p class="hint">Recognised columns: <code>Name</code> (or <code>First name</code> + <code>Last name</code>), any number of <code>Affiliation</code> columns, <code>Email</code>, <code>Corresponding</code> and <code>Equal contribution</code> (mark with yes / x / 1), plus <code>Funding</code> and <code>COI</code> (or <code>Conflict of interest</code>) for per-author statements. Without a header row, column 1 is the name and the rest are affiliations.</p>
     </section>
 
     <section id="order-section" hidden>
@@ -195,12 +195,12 @@ if (GOATCOUNTER_CODE) {
 }
 let tab = 'rich', out = null, order = [], model = null, dragging = null;
 
-const SAMPLE = `Name,Affiliation 1,Affiliation 2,Email,Corresponding,Equal contribution
-Maria L. Hernández,"Department of Biology, University of Oslo, Oslo, Norway",,,,yes
-Kenji Watanabe,"Dept. of Biology, University of Oslo, Oslo, Norway","Centre for Ecological Synthesis, Bergen, Norway",,,yes
-Aisha Bello,"Centre for Ecological Synthesis, Bergen, Norway",,,,
-Tomás O'Neill,"School of Mathematics, Trinity College Dublin, Dublin, Ireland","Department of Biology, University of Oslo, Oslo, Norway",,,
-Priya Raghavan,"Department of Biology, University of Oslo, Oslo, Norway; School of Mathematics, Trinity College Dublin, Dublin, Ireland",,p.raghavan@uio.no,yes,`;
+const SAMPLE = `Name,Affiliation 1,Affiliation 2,Email,Corresponding,Equal contribution,Funding,COI
+Maria L. Hernández,"Department of Biology, University of Oslo, Oslo, Norway",,,,yes,Research Council of Norway (grant 123456),None declared
+Kenji Watanabe,"Dept. of Biology, University of Oslo, Oslo, Norway","Centre for Ecological Synthesis, Bergen, Norway",,,yes,Japan Society for the Promotion of Science (JSPS KAKENHI 98765),None declared
+Aisha Bello,"Centre for Ecological Synthesis, Bergen, Norway",,,,,,Consultant for GreenLeaf Analytics
+Tomás O'Neill,"School of Mathematics, Trinity College Dublin, Dublin, Ireland","Department of Biology, University of Oslo, Oslo, Norway",,,,Science Foundation Ireland (grant 20/IF/001),None declared
+Priya Raghavan,"Department of Biology, University of Oslo, Oslo, Norway; School of Mathematics, Trinity College Dublin, Dublin, Ireland",,p.raghavan@uio.no,yes,,,None declared`;
 
 /* ---------- input ---------- */
 const input = $('#input'), fileEl = $('#file'), drop = $('#drop');
@@ -234,7 +234,7 @@ function loadFile(f) {
 $('#sample').onclick = () => { order = []; input.value = SAMPLE; render(); };
 $('#clear').onclick = () => { input.value = ''; render(); };
 $('#template').onclick = () => {
-  const csv = 'Name,Affiliation 1,Affiliation 2,Affiliation 3,Email,Corresponding,Equal contribution\n';
+  const csv = 'Name,Affiliation 1,Affiliation 2,Affiliation 3,Email,Corresponding,Equal contribution,Funding,COI\n';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = 'author-template.csv'; a.click();
@@ -259,6 +259,8 @@ function detectColumns(header) {
     email: find(/e-?mail/),
     corr: find(/corresp/),
     equal: find(/equal|co-?first|joint/),
+    funding: find(/^fund(ing)?$/),
+    coi: find(/^coi$|conflicts? of interest|competing interests?/),
     affs: h.map((x, i) => (/^affil/.test(x) || /^(institutions?|departments?|organi[sz]ations?|address(es)?)\s*\d*$/.test(x)) ? i : -1).filter(i => i >= 0)
   };
   return (c.name >= 0 || c.last >= 0 || c.affs.length) ? c : null;
@@ -268,7 +270,7 @@ function buildModel(rows, o, order) {
   rows = rows.filter(r => r.some(c => clean(c)));
   if (!rows.length) return null;
   let cols = detectColumns(rows[0]), data = rows.slice(1), header = rows[0];
-  if (!cols) { cols = { name: 0, first: -1, middle: -1, last: -1, email: -1, corr: -1, equal: -1, affs: rows[0].map((_, i) => i).slice(1) }; data = rows; header = null; }
+  if (!cols) { cols = { name: 0, first: -1, middle: -1, last: -1, email: -1, corr: -1, equal: -1, funding: -1, coi: -1, affs: rows[0].map((_, i) => i).slice(1) }; data = rows; header = null; }
   if (cols.name < 0 && cols.last < 0) cols.name = 0;
 
   // pass 1: read every author row
@@ -284,7 +286,8 @@ function buildModel(rows, o, order) {
     raw = raw.map(clean).map(s => s.replace(/[.;,]+$/, '')).filter(Boolean);
     const n = (seen.get(full.toLowerCase()) || 0) + 1; seen.set(full.toLowerCase(), n);
     authors.push({ key: full.toLowerCase() + '#' + n, row: r, full, first, middle, last, raw,
-      email: get(cols.email), corr: truthy(get(cols.corr)), equal: truthy(get(cols.equal)) });
+      email: get(cols.email), corr: truthy(get(cols.corr)), equal: truthy(get(cols.equal)),
+      funding: get(cols.funding), coi: get(cols.coi) });
   }
   if (!authors.length) return null;
 
@@ -345,6 +348,16 @@ function displayName(a, o) {
   if (!given) return a.last;
   return `${initials(given, o.name === 'init')} ${a.last}`;
 }
+function authorInitials(a) {
+  if (/\b(consortium|group)\b/i.test(a.full)) return a.full;
+  return initials([a.first, a.middle, a.last].filter(Boolean).join(' '), false);
+}
+function sentence(s) { s = s.trim(); return s && !/[.!?]$/.test(s) ? s + '.' : s; }
+function statement(model, field) {
+  const withIt = model.authors.filter(a => a[field]);
+  if (!withIt.length) return '';
+  return withIt.map(a => `${authorInitials(a)}: ${sentence(a[field])}`).join(' ');
+}
 
 function format(model, o) {
   const [cMark, eMark] = o.marks.split('|');
@@ -366,7 +379,12 @@ function format(model, o) {
         : (corr.length > 1 ? 'Corresponding authors.' : 'Corresponding author.') });
     }
   }
-  return { authors, affs, notes };
+  const extra = [];
+  const funding = statement(model, 'funding');
+  if (funding) extra.push({ label: 'Funding', text: funding });
+  const coi = statement(model, 'coi');
+  if (coi) extra.push({ label: 'Conflicts of interest', text: coi });
+  return { authors, affs, notes, extra };
 }
 
 function joinAuthors(items, o) {
@@ -386,19 +404,24 @@ function toHTML(f, o, full) {
   const a = `<p${full ? '' : ' class="authors"'}>${joinAuthors(f.authors.map(x => esc(x.name) + (x.sup ? `<sup>${esc(x.sup)}</sup>` : '')), o)}</p>`;
   const af = f.affs.map(x => `<p><sup>${x.sup}</sup>${esc(x.text)}</p>`).join('\n');
   const nt = f.notes.map(x => `<p><sup>${esc(x.sup)}</sup>${esc(x.text)}</p>`).join('\n');
-  if (full) return [a, af, nt].filter(Boolean).join('\n\n');
-  return `${a}<div class="affs">${af}</div>${nt ? `<div class="notes">${nt}</div>` : ''}`;
+  const ex = (f.extra || []).map(x => `<p><strong>${esc(x.label)}:</strong> ${esc(x.text)}</p>`).join('\n');
+  if (full) return [a, af, nt, ex].filter(Boolean).join('\n\n');
+  return `${a}<div class="affs">${af}</div>${nt ? `<div class="notes">${nt}</div>` : ''}${ex ? `<div class="notes">${ex}</div>` : ''}`;
 }
 function toLatex(f, o) {
   const a = joinAuthors(f.authors.map(x => texEsc(x.name) + (x.sup ? `\\textsuperscript{${texSup(x.sup)}}` : '')), o);
   const lines = [...f.affs, ...f.notes].map(x => `\\textsuperscript{${texSup(x.sup)}}${texEsc(x.text)}`);
+  const exLines = (f.extra || []).map(x => `\\textbf{${texEsc(x.label)}:} ${texEsc(x.text)}`);
   let s = `% Author block — paste into your document body\n\\begin{center}\n${a}\n\\end{center}\n\n\\noindent\n${lines.join(' \\\\\n')}\n`;
+  if (exLines.length) s += `\n\\noindent\n${exLines.join(' \\\\\n')}\n`;
   if (s.includes('\\Letter')) s = '% \\Letter needs \\usepackage{marvosym}\n' + s;
   return s;
 }
 function toPlain(f, o) {
   const a = joinAuthors(f.authors.map(x => x.name + uniSup(x.sup)), o);
-  return [a, '', ...f.affs.map(x => uniSup(x.sup) + ' ' + x.text), ...(f.notes.length ? ['', ...f.notes.map(x => x.sup + ' ' + x.text)] : [])].join('\n');
+  return [a, '', ...f.affs.map(x => uniSup(x.sup) + ' ' + x.text),
+    ...(f.notes.length ? ['', ...f.notes.map(x => x.sup + ' ' + x.text)] : []),
+    ...((f.extra || []).length ? ['', ...f.extra.map(x => x.label + ': ' + x.text)] : [])].join('\n');
 }
 
 /* ---------- render ---------- */
